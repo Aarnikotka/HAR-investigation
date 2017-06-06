@@ -1,0 +1,73 @@
+---
+title: "Human Activity Recognition"
+author: "Slava"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,cache = TRUE)
+```
+
+## Overview
+
+Human Activity Recognition - HAR - has emerged as a key research area in the last years and is gaining increasing attention by the pervasive computing research community. There are many potential applications for HAR, like: elderly monitoring, life log systems for monitoring energy expenditure and for supporting weight-loss programs, and digital assistants for weight lifting exercises.
+
+More detailed information can be found [here](http://groupware.les.inf.puc-rio.br/har#ixzz4j8HDM3f1)
+
+## Receiving and exploring data
+
+It is assumed that the necessary file is located in your working directory
+
+```{r import_data}
+in_data<-read.csv("pml-training.csv")
+```
+
+After applying str() function we can find that lots of variables have more than 95% of NA values, so it would be usefull to reduce data dimension by means of dropping these variables:
+
+``` {r drop_var,message=FALSE}
+library(dplyr)
+drop_lines<-in_data %>% lapply(is.na) %>% sapply(sum)
+in_data_cut<-in_data[,which(drop_lines==0)]
+```
+
+Thus new data frame has only `r dim(in_data_cut)[2]` variables. Some of the users have much more observations on one particular condition:
+
+``` {r table_user}
+table(in_data_cut$user_name,in_data_cut$classe)
+```
+
+So it is advisable to drop users_name variable.
+
+```{r drop_user}
+in_data_cut$user_name<-NULL
+```
+
+Now split the data into training and testing sets (70% and 30% respectively):
+
+```{r split_data,message=FALSE}
+library(caret)
+set.seed(100)
+in_split<-createDataPartition(y=in_data_cut$classe,p=0.7,list=FALSE)
+in_train<-in_data_cut[in_split,]
+in_test<-in_data_cut[-in_split,]
+```
+
+
+
+## Model selection and results
+
+HAR classification problem has been sucessfully solved by Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. in their work ["Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements"](http://groupware.les.inf.puc-rio.br/work.jsf?p1=10335#ixzz4jCNKlOki)
+
+They proposed adaBoost method with 10 decision trees. We will use the same model with no cross validation and only with 1000 observations in order to speed up computations:
+
+```{r ada_boost,message=FALSE,warning=FALSE}
+library(adabag)
+set.seed(52)
+in_train_samp<-in_train[round(runif(1000,min=1,max=dim(in_train)[1]),0),]
+mdl<-boosting(classe~.,data=in_train_samp,mfinal = 10)
+test_prediction<-predict.boosting(mdl,newdata = in_test)
+fin_accuracy<-sum(test_prediction$class==in_test$classe)/dim(in_test)[1]
+```
+
+Classification accuracy for the test set is `r round(fin_accuracy*100,2)`%.
+
